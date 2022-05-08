@@ -22,5 +22,7 @@ assert 3 3
 assert 42 42
 # step 2
 assert 21 "5+20-4"
+# step 3
+assert 41 " 12 + 34 - 5 "
 
 echo OK
