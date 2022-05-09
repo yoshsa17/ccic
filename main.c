@@ -215,7 +215,9 @@ void gen(Node *node) {
     printf("  imul rax, rdi\n");
     break;
   case ND_DIV:
+    // rax:64bit => 128bit
     printf("  cqo\n");
+    // idiv rdi = rax+rdx / rdi) => rax(quotient), rdx(remainder) 
     printf("  idiv rdi\n");
     break;
   }
