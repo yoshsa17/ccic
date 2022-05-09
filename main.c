@@ -5,6 +5,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+/////////////////////////////////
+//
+// Tokenizer
+// 
+/////////////////////////////////
 typedef enum {
   TOKEN_RESERVED, // symbol (e.g "+", "-")
   TOKEN_NUM,      // number
@@ -115,7 +120,7 @@ Token *tokenize() {
       continue;
     }
 
-    if (*p == '+' || *p == '-') {
+    if (strchr("+-*/()", *p)) {
       current = new_token(TOKEN_RESERVED, current, p);
       p++;
       continue;
@@ -135,6 +140,13 @@ Token *tokenize() {
   return head.next;
 }
 
+
+/////////////////////////////////
+// 
+// Parser
+// 
+/////////////////////////////////
+
 Node *new_node(NodeType type, Node *lhs, Node *rhs) {
   Node *node = calloc(1, sizeof(Node));
   node->type = type;
@@ -151,6 +163,12 @@ Node *new_node_num(int val) {
   return node;
 }
 
+
+Node *expr();
+Node *mul();
+Node *unary();
+Node *primary();
+
 // expr    = mul ("+" mul | "-" mul)*
 Node *expr() {
   Node *node = mul();
@@ -166,19 +184,30 @@ Node *expr() {
   }
 }
 
-// mul = primary ("*" primary | "/" primary)*
+// mul     = unary ("*" unary | "/" unary)*
 Node *mul() {
-  Node *node = primary();
+  Node *node = unary();
 
   for (;;) {
     if (consume('*')) {
-      node = new_node(ND_MUL, node, primary());
+      node = new_node(ND_MUL, node, unary());
     } else if (consume('/')) {
-      node = new_node(ND_DIV, node, primary());
+      node = new_node(ND_DIV, node, unary());
     } else {
       return node;
     }
   }
+}
+
+// unary   = ("+" | "-")? primary
+Node *unary() {
+  if (consume('+')){
+    return primary();
+  }
+  if (consume('-')) {
+    return new_node(ND_SUB, new_node_num(0), primary());
+  }
+  return primary();
 }
 
 // primary = num | "(" expr ")"
@@ -191,6 +220,13 @@ Node *primary() {
 
   return new_node_num(expect_number());
 }
+
+
+/////////////////////////////////
+// 
+// Code generator 
+// 
+/////////////////////////////////
 
 void gen(Node *node) {
   if (node->type == ND_NUM) {
@@ -225,6 +261,12 @@ void gen(Node *node) {
   printf("  push rax\n");
 }
 
+/////////////////////////////////
+//
+// Main
+//
+/////////////////////////////////
+
 int main(int argc, char **argv){
   if(argc != 2){
     fprintf(stderr, "invalid args\n");
@@ -232,23 +274,16 @@ int main(int argc, char **argv){
   }
 
   user_input = argv[1];
-  token = tokenize(user_input);
+  token = tokenize();
+  Node *node = expr();
 
   printf(".intel_syntax noprefix\n");
   printf(".globl main\n");
   printf("main:\n");
-  printf("  mov rax, %d\n", expect_number());
 
-  while (!at_eof()) {
-    if (consume('+')) {
-      printf("  add rax, %d\n", expect_number());
-      continue;
-    }
+  gen(node);
 
-    expect('-');
-    printf("  sub rax, %d\n", expect_number());
-  }
-
+  printf("  pop rax\n");
   printf("  ret\n");
   return 0;
 }
