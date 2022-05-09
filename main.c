@@ -205,6 +205,7 @@ Node *unary() {
     return primary();
   }
   if (consume('-')) {
+    // -x => 0-x
     return new_node(ND_SUB, new_node_num(0), primary());
   }
   return primary();
