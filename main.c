@@ -19,13 +19,40 @@ struct Token {
   char *str;
 };
 
+// AST node type
+typedef enum {
+  ND_ADD, // +
+  ND_SUB, // -
+  ND_MUL, // *
+  ND_DIV, // /
+  ND_NUM, // integer
+} NodeType;
+
+typedef struct Node Node;
+
+struct Node {
+  NodeType type; 
+  Node *lhs;     // left child node
+  Node *rhs;     // right child node
+  int val;       // when NodeType is ND_NUM, it represents its value
+};
+
 // token currently focusing on
 Token *token;
 
-// 
-void error(char *fmt, ...) {
+char *user_input;
+
+void error_at(char *loc, char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
+
+  int pos = loc - user_input;
+  fprintf(stderr, "%p\n", loc);
+  fprintf(stderr, "%p\n", user_input);
+  fprintf(stderr, "%d\n", pos);
+  fprintf(stderr, "%s\n", user_input);
+  fprintf(stderr, "%*s", pos, " "); // print whitespaces
+  fprintf(stderr, "^ ");
   vfprintf(stderr, fmt, ap);
   fprintf(stderr, "\n");
   exit(1);
@@ -45,7 +72,7 @@ bool consume(char op) {
 // Otherwise, throw an error.
 void expect(char op) {
   if (token->type != TOKEN_RESERVED || token->str[0] != op) {
-    error("token is not '%c'", op);
+    error_at(token->str, "token is not '%c'", op);
   }
   token = token->next;
 }
@@ -54,7 +81,7 @@ void expect(char op) {
 // and return that number. Otherwise, throw an error.
 int expect_number() {
   if (token->type != TOKEN_NUM) {
-    error("token is not a number");
+    error_at(token->str, "token is not a number");
   }
   int val = token->val;
   token = token->next;
@@ -73,7 +100,9 @@ Token *new_token(TokenType type, Token *current, char *str) {
   return token;
 }
 
-Token *tokenize(char *p) {
+Token *tokenize() {
+  char *p = user_input;
+
   // create a fake head element and return head->next at the end
   Token head;
   head.next = NULL;
@@ -98,12 +127,100 @@ Token *tokenize(char *p) {
       continue;
     }
 
-    error("Unable to tokenize");
+    error_at(p, "Unable to tokenize");
   }
 
   // now *p == '\0'
   new_token(TOKEN_EOF, current, p);
   return head.next;
+}
+
+Node *new_node(NodeType type, Node *lhs, Node *rhs) {
+  Node *node = calloc(1, sizeof(Node));
+  node->type = type;
+  node->lhs = lhs;
+  node->rhs = rhs;
+  return node;
+}
+
+// number node has no child nodes
+Node *new_node_num(int val) {
+  Node *node = calloc(1, sizeof(Node));
+  node->type = ND_NUM;
+  node->val = val;
+  return node;
+}
+
+// expr    = mul ("+" mul | "-" mul)*
+Node *expr() {
+  Node *node = mul();
+
+  for (;;) {
+    if (consume('+')) {
+      node = new_node(ND_ADD, node, mul());
+    } else if (consume('-')) {
+      node = new_node(ND_SUB, node, mul());
+    } else {
+      return node;
+    }
+  }
+}
+
+// mul = primary ("*" primary | "/" primary)*
+Node *mul() {
+  Node *node = primary();
+
+  for (;;) {
+    if (consume('*')) {
+      node = new_node(ND_MUL, node, primary());
+    } else if (consume('/')) {
+      node = new_node(ND_DIV, node, primary());
+    } else {
+      return node;
+    }
+  }
+}
+
+// primary = num | "(" expr ")"
+Node *primary() {
+  if (consume('(')) {
+    Node *node = expr();
+    expect(')');
+    return node;
+  }
+
+  return new_node_num(expect_number());
+}
+
+void gen(Node *node) {
+  if (node->type == ND_NUM) {
+    printf("  push %d\n", node->val);
+    return;
+  }
+
+  gen(node->lhs);
+  gen(node->rhs);
+
+  printf("  pop rdi\n");
+  printf("  pop rax\n");
+
+  switch (node->type) {
+  case ND_ADD:
+    printf("  add rax, rdi\n");
+    break;
+  case ND_SUB:
+    printf("  sub rax, rdi\n");
+    break;
+  case ND_MUL:
+    printf("  imul rax, rdi\n");
+    break;
+  case ND_DIV:
+    printf("  cqo\n");
+    printf("  idiv rdi\n");
+    break;
+  }
+
+  printf("  push rax\n");
 }
 
 int main(int argc, char **argv){
@@ -112,7 +229,8 @@ int main(int argc, char **argv){
     return 1;
   }
 
-  token = tokenize(argv[1]);
+  user_input = argv[1];
+  token = tokenize(user_input);
 
   printf(".intel_syntax noprefix\n");
   printf(".globl main\n");
