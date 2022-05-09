@@ -4,7 +4,7 @@ assert(){
   expected="$1"
   input="$2"
 
-  ./main "$input" > tmp.s
+  ./1cc "$input" > tmp.s
   gcc -o tmp tmp.s
   ./tmp
   actual="$?"
@@ -33,6 +33,7 @@ assert 10 '-10+20'
 assert 10 '- -10'
 assert 10 '- - +10'
 
+# step 7
 assert 0 '0==1'
 assert 1 '42==42'
 assert 1 '0!=1'

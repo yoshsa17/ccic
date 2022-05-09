@@ -1,11 +1,16 @@
 CFLAGS=-std=c11 -g -static
+SRCS=$(wildcard *.c)
+OBJS=$(SRCS:.c=.o)
 
-main: main.c
+1cc: $(OBJS)
+	$(CC) -o 1cc $(OBJS) $(LDFLAGS)
 
-test: main
+$(OBJS): 1cc.h
+
+test: 1cc
 	./test.sh
 
 clean:
-	rm -f main *.o *~ tmp*
+	rm -f 1cc *.o *~ tmp*
 
 .PHONY: test clean
