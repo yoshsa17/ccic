@@ -10,6 +10,7 @@
 // Tokenizer
 // 
 /////////////////////////////////
+
 typedef enum {
   TOKEN_RESERVED, // symbol (e.g "+", "-")
   TOKEN_NUM,      // number
@@ -20,26 +21,9 @@ typedef struct Token Token;
 struct Token {
   TokenType type; 
   Token *next; 
-  int val;
+  int val;  // if token is a number, this represents its value
   char *str;
-};
-
-// AST node type
-typedef enum {
-  ND_ADD, // +
-  ND_SUB, // -
-  ND_MUL, // *
-  ND_DIV, // /
-  ND_NUM, // integer
-} NodeType;
-
-typedef struct Node Node;
-
-struct Node {
-  NodeType type; 
-  Node *lhs;     // left child node
-  Node *rhs;     // right child node
-  int val;       // when NodeType is ND_NUM, it represents its value
+  int len; // token length for "==", "<=" etc.
 };
 
 // token currently focusing on
@@ -65,8 +49,12 @@ void error_at(char *loc, char *fmt, ...) {
 
 // If the next token is the expected symbol, proceed one token forward 
 // and return true. Otherwise return false.
-bool consume(char op) {
-  if (token->type != TOKEN_RESERVED || token->str[0] != op) {
+bool consume(char *op) {
+  if (token->type != TOKEN_RESERVED ||
+      strlen(op) != token->len ||
+      // memcmp => return 0 if equal => if(false)
+      memcmp(token->str, op, token->len)) {
+
     return false;
   }
   token = token->next;
@@ -75,9 +63,12 @@ bool consume(char op) {
 
 // If the next token is the expected symbol, proceed one token forward.
 // Otherwise, throw an error.
-void expect(char op) {
-  if (token->type != TOKEN_RESERVED || token->str[0] != op) {
-    error_at(token->str, "token is not '%c'", op);
+void expect(char *op) {
+  if (token->type != TOKEN_RESERVED ||
+      strlen(op) != token->len ||
+      memcmp(token->str, op, token->len)) {
+
+    error_at(token->str, "token is not \"%s\"", op);
   }
   token = token->next;
 }
@@ -97,12 +88,17 @@ bool at_eof() {
   return token->type == TOKEN_EOF;
 }
 
-Token *new_token(TokenType type, Token *current, char *str) {
+Token *new_token(TokenType type, Token *current, char *str, int len) {
   Token *token = calloc(1, sizeof(Token));
   token->type = type;
   token->str = str;
+  token->len = len;
   current->next = token;
   return token;
+}
+
+bool startswith(char *p, char *q) {
+  return memcmp(p, q, strlen(q)) == 0;
 }
 
 Token *tokenize() {
@@ -120,15 +116,26 @@ Token *tokenize() {
       continue;
     }
 
-    if (strchr("+-*/()", *p)) {
-      current = new_token(TOKEN_RESERVED, current, p);
+    if (startswith(p, "==") ||
+        startswith(p, "!=") ||
+        startswith(p, "<=") ||
+        startswith(p, ">=")) {
+      current = new_token(TOKEN_RESERVED, current, p, 2);
+      p += 2;
+      continue;
+    }
+
+    if (strchr("+-*/()<>", *p)) {
+      current = new_token(TOKEN_RESERVED, current, p, 1);
       p++;
       continue;
     }
 
     if (isdigit(*p)) {
-      current = new_token(TOKEN_NUM, current, p);
+      current = new_token(TOKEN_NUM, current, p, 0);
+      char *q = p;
       current->val = strtol(p, &p, 10);
+      current->len = p - q;
       continue;
     }
 
@@ -136,7 +143,7 @@ Token *tokenize() {
   }
 
   // now *p == '\0'
-  new_token(TOKEN_EOF, current, p);
+  new_token(TOKEN_EOF, current, p, 0);
   return head.next;
 }
 
@@ -147,8 +154,37 @@ Token *tokenize() {
 // 
 /////////////////////////////////
 
-Node *new_node(NodeType type, Node *lhs, Node *rhs) {
+// AST node type
+typedef enum {
+  ND_ADD, // +
+  ND_SUB, // -
+  ND_MUL, // *
+  ND_DIV, // /
+  ND_EQ,  // ==
+  ND_NE,  // !=
+  ND_LT,  // <
+  ND_LE,  // <=
+  ND_NUM, // integer
+} NodeType;
+
+typedef struct Node Node;
+
+struct Node {
+  NodeType type; 
+  Node *lhs;     // left child node
+  Node *rhs;     // right child node
+  int val;       // when NodeType is ND_NUM, it represents its value
+};
+
+
+Node *new_node(NodeType type) {
   Node *node = calloc(1, sizeof(Node));
+  node->type = type;
+  return node;
+}
+
+Node *new_binary(NodeType type, Node *lhs, Node *rhs) {
+  Node *node = new_node(type);
   node->type = type;
   node->lhs = lhs;
   node->rhs = rhs;
@@ -157,71 +193,111 @@ Node *new_node(NodeType type, Node *lhs, Node *rhs) {
 
 // number node has no child nodes
 Node *new_node_num(int val) {
-  Node *node = calloc(1, sizeof(Node));
-  node->type = ND_NUM;
+  Node *node = new_node(ND_NUM);
   node->val = val;
   return node;
 }
 
-
 Node *expr();
+Node *equality();
+Node *relational();
+Node *add();
 Node *mul();
 Node *unary();
 Node *primary();
 
-// expr    = mul ("+" mul | "-" mul)*
+// expr = equality
 Node *expr() {
-  Node *node = mul();
+  return equality();
+}
+
+// equality = relational ("==" relational | "!=" relational)*
+Node *equality() {
+  Node *node = relational();
 
   for (;;) {
-    if (consume('+')) {
-      node = new_node(ND_ADD, node, mul());
-    } else if (consume('-')) {
-      node = new_node(ND_SUB, node, mul());
+    if (consume("==")) {
+      node = new_binary(ND_EQ, node, relational());
+    } else if (consume("!=")) {
+      node = new_binary(ND_NE, node, relational());
     } else {
       return node;
     }
   }
 }
 
-// mul     = unary ("*" unary | "/" unary)*
+// relational = add ("<" add | "<=" add | ">" add | ">=" add)*
+Node *relational() {
+  Node *node = add();
+
+  for (;;) {
+    if (consume("<")) {
+      node = new_binary(ND_LT, node, add());
+    } else if (consume("<=")) {
+      node = new_binary(ND_LE, node, add());
+    } else if (consume(">")) {
+      // use ND_LT and flip right node and left node
+      node = new_binary(ND_LT, add(), node);
+    } else if (consume(">=")) {
+      node = new_binary(ND_LE, add(), node);
+    } else {
+      return node;
+    }
+  }
+}
+
+// add = mul ("+" mul | "-" mul)*
+Node *add() {
+  Node *node = mul();
+
+  for (;;) {
+    if (consume("+")) {
+      node = new_binary(ND_ADD, node, mul());
+    } else if (consume("-")) {
+      node = new_binary(ND_SUB, node, mul());
+    } else {
+      return node;
+    }
+  }
+}
+
+// mul   = unary ("*" unary | "/" unary)*
 Node *mul() {
   Node *node = unary();
 
   for (;;) {
-    if (consume('*')) {
-      node = new_node(ND_MUL, node, unary());
-    } else if (consume('/')) {
-      node = new_node(ND_DIV, node, unary());
+    if (consume("*")) {
+      node = new_binary(ND_MUL, node, unary());
+    } else if (consume("/")) {
+      node = new_binary(ND_DIV, node, unary());
     } else {
       return node;
     }
   }
 }
 
-// unary   = ("+" | "-")? primary
+// unary   = ("+" | "-")? unary | primary
 Node *unary() {
-  if (consume('+')){
-    return primary();
+  if (consume("+")){
+    return unary();
   }
-  if (consume('-')) {
+  if (consume("-")) {
     // -x => 0-x
-    return new_node(ND_SUB, new_node_num(0), primary());
+    return new_binary(ND_SUB, new_node_num(0), unary());
   }
   return primary();
 }
 
 // primary = num | "(" expr ")"
 Node *primary() {
-  if (consume('(')) {
+  if (consume("(")) {
     Node *node = expr();
-    expect(')');
+    expect(")");
     return node;
   }
 
   return new_node_num(expect_number());
 }
-
 
 /////////////////////////////////
 // 
@@ -256,6 +332,31 @@ void gen(Node *node) {
     printf("  cqo\n");
     // idiv rdi = rax+rdx / rdi) => rax(quotient), rdx(remainder) 
     printf("  idiv rdi\n");
+    break;
+  case ND_EQ:
+    // store the result in the flags register
+    printf("  cmp rax, rdi\n");
+    // copy the value of the flags register in al
+    printf("  sete al\n");
+    // clear the remaining bits
+    // rax(63bit) = | remaining(56bit) + al(8bit) |
+    printf("  movzb rax, al\n");
+    break;
+  case ND_NE:
+    printf("  cmp rax, rdi\n");
+    // flip the value in the flags register and store it in al
+    printf("  setne al\n");
+    printf("  movzb rax, al\n");
+    break;
+  case ND_LT:
+    printf("  cmp rax, rdi\n");
+    printf("  setl al\n");
+    printf("  movzb rax, al\n");
+    break;
+  case ND_LE:
+    printf("  cmp rax, rdi\n");
+    printf("  setle al\n");
+    printf("  movzb rax, al\n");
     break;
   }
 
