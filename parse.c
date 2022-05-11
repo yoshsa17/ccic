@@ -1,121 +1,151 @@
 #include "1cc.h"
 
-// token currently focusing on
-Token *token;
-char *user_input;
 
-void error_at(char *loc, char *fmt, ...) {
-  va_list ap;
-  va_start(ap, fmt);
-
-  int pos = loc - user_input;
-  fprintf(stderr, "%p\n", loc);
-  fprintf(stderr, "%p\n", user_input);
-  fprintf(stderr, "%d\n", pos);
-  fprintf(stderr, "%s\n", user_input);
-  fprintf(stderr, "%*s", pos, " "); // print whitespaces
-  fprintf(stderr, "^ ");
-  vfprintf(stderr, fmt, ap);
-  fprintf(stderr, "\n");
-  exit(1);
+Node *new_node(NodeType type) {
+  Node *node = calloc(1, sizeof(Node));
+  node->type = type;
+  return node;
 }
 
-// If the next token is the expected symbol, proceed one token forward 
-// and return true. Otherwise return false.
-bool consume(char *op) {
-  if (token->type != TOKEN_RESERVED ||
-      strlen(op) != token->len ||
-      // memcmp => return 0 if equal => if(false)
-      memcmp(token->str, op, token->len)) {
+Node *new_binary(NodeType type, Node *lhs, Node *rhs) {
+  Node *node = new_node(type);
+  node->type = type;
+  node->lhs = lhs;
+  node->rhs = rhs;
+  return node;
+}
 
-    return false;
+// number node has no child nodes
+Node *new_node_num(int val) {
+  Node *node = new_node(ND_NUM);
+  node->val = val;
+  return node;
+}
+
+Node *code[100];
+
+// program    = stmt*
+void program() {
+  int i = 0;
+  while (!at_eof()) {
+    code[i++] = stmt();
   }
-  token = token->next;
-  return true;
+  code[i] = NULL;
 }
 
-// If the next token is the expected symbol, proceed one token forward.
-// Otherwise, throw an error.
-void expect(char *op) {
-  if (token->type != TOKEN_RESERVED ||
-      strlen(op) != token->len ||
-      memcmp(token->str, op, token->len)) {
+// stmt       = expr ";"
+Node *stmt() {
+  Node *node = expr();
+  expect(";");
+  return node;
+}
 
-    error_at(token->str, "token is not \"%s\"", op);
+// expr       = assign
+Node *expr() {
+  return assign();
+}
+
+// assign     = equality ("=" assign)?
+Node *assign() {
+  Node *node = equality();
+  if (consume("="))
+    node = new_binary(ND_ASSIGN, node, assign());
+  return node;
+}
+
+// equality = relational ("==" relational | "!=" relational)*
+Node *equality() {
+  Node *node = relational();
+
+  for (;;) {
+    if (consume("==")) {
+      node = new_binary(ND_EQ, node, relational());
+    } else if (consume("!=")) {
+      node = new_binary(ND_NE, node, relational());
+    } else {
+      return node;
+    }
   }
-  token = token->next;
 }
 
-// If the next token is a number, proceed one token forward 
-// and return that number. Otherwise, throw an error.
-int expect_number() {
-  if (token->type != TOKEN_NUM) {
-    error_at(token->str, "token is not a number");
+// relational = add ("<" add | "<=" add | ">" add | ">=" add)*
+Node *relational() {
+  Node *node = add();
+
+  for (;;) {
+    if (consume("<")) {
+      node = new_binary(ND_LT, node, add());
+    } else if (consume("<=")) {
+      node = new_binary(ND_LE, node, add());
+    } else if (consume(">")) {
+      // use ND_LT and flip right node and left node
+      node = new_binary(ND_LT, add(), node);
+    } else if (consume(">=")) {
+      node = new_binary(ND_LE, add(), node);
+    } else {
+      return node;
+    }
   }
-  int val = token->val;
-  token = token->next;
-  return val;
 }
 
-bool at_eof() {
-  return token->type == TOKEN_EOF;
+// add = mul ("+" mul | "-" mul)*
+Node *add() {
+  Node *node = mul();
+
+  for (;;) {
+    if (consume("+")) {
+      node = new_binary(ND_ADD, node, mul());
+    } else if (consume("-")) {
+      node = new_binary(ND_SUB, node, mul());
+    } else {
+      return node;
+    }
+  }
 }
 
-Token *new_token(TokenType type, Token *current, char *str, int len) {
-  Token *token = calloc(1, sizeof(Token));
-  token->type = type;
-  token->str = str;
-  token->len = len;
-  current->next = token;
-  return token;
+// mul   = unary ("*" unary | "/" unary)*
+Node *mul() {
+  Node *node = unary();
+
+  for (;;) {
+    if (consume("*")) {
+      node = new_binary(ND_MUL, node, unary());
+    } else if (consume("/")) {
+      node = new_binary(ND_DIV, node, unary());
+    } else {
+      return node;
+    }
+  }
 }
 
-bool startswith(char *p, char *q) {
-  return memcmp(p, q, strlen(q)) == 0;
+// unary   = ("+" | "-")? unary | primary
+Node *unary() {
+  if (consume("+")){
+    return unary();
+  }
+  if (consume("-")) {
+    // -x => 0-x
+    return new_binary(ND_SUB, new_node_num(0), unary());
+  }
+  return primary();
 }
 
-Token *tokenize() {
-  char *p = user_input;
-
-  // create a fake head element and return head->next at the end
-  Token head;
-  head.next = NULL;
-  Token *current = &head;
-
-  while (*p) {
-    // skip white-space characters
-    if (isspace(*p)) {
-      p++;
-      continue;
-    }
-
-    if (startswith(p, "==") ||
-        startswith(p, "!=") ||
-        startswith(p, "<=") ||
-        startswith(p, ">=")) {
-      current = new_token(TOKEN_RESERVED, current, p, 2);
-      p += 2;
-      continue;
-    }
-
-    if (strchr("+-*/()<>", *p)) {
-      current = new_token(TOKEN_RESERVED, current, p, 1);
-      p++;
-      continue;
-    }
-
-    if (isdigit(*p)) {
-      current = new_token(TOKEN_NUM, current, p, 0);
-      char *q = p;
-      current->val = strtol(p, &p, 10);
-      current->len = p - q;
-      continue;
-    }
-
-    error_at(p, "Unable to tokenize");
+// primary    = num | ident | "(" expr ")"
+Node *primary() {
+  if (consume("(")) {
+    Node *node = expr();
+    expect(")");
+    return node;
   }
 
-  // now *p == '\0'
-  new_token(TOKEN_EOF, current, p, 0);
-  return head.next;
+  Token *tok = consume_ident();
+  if (tok) {
+    Node *node = calloc(1, sizeof(Node));
+    node->type = ND_LVAR;
+    // ??
+    node->offset = (tok->str[0] - 'a' + 1) * 8;
+    return node;
+  }
+
+  return new_node_num(expect_number());
 }
