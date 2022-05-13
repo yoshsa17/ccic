@@ -10,6 +10,7 @@
 typedef enum {
   TOKEN_RESERVED, // symbol (e.g "+", "-")
   TOKEN_IDENT,
+  TOKEN_RETURN,
   TOKEN_NUM,      // number
   TOKEN_EOF,      // token representing the end of the input
 } TokenType;
@@ -38,6 +39,7 @@ extern LVar *locals;
 void error(char *fmt, ...);
 void error_at(char *loc, char *fmt, ...);
 bool consume(char *op);
+bool consume_return(char *op);
 Token* consume_ident();
 void expect(char *op);
 int expect_number();
@@ -45,6 +47,7 @@ bool at_eof();
 Token *new_token(TokenType type, Token *current, char *str, int len);
 bool startswith(char *p, char *q);
 LVar *find_lvar(Token *tok);
+int is_alnum(char c);
 Token *tokenize();
 
 //// Parse
@@ -62,6 +65,7 @@ typedef enum {
   ND_NUM, // integer
   ND_ASSIGN, // =
   ND_LVAR,   // local variable
+  ND_RETURN, // return
 } NodeType;
 
 typedef struct Node Node;

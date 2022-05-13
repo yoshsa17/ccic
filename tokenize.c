@@ -32,7 +32,16 @@ bool consume(char *op) {
       strlen(op) != token->len ||
       // memcmp => return 0 if equal => if(false)
       memcmp(token->str, op, token->len)) {
+    return false;
+  }
+  token = token->next;
+  return true;
+}
 
+bool consume_return(char *op) {
+  if (token->type != TOKEN_RETURN ||
+      strlen(op) != token->len ||
+      memcmp(token->str, op, token->len)) {
     return false;
   }
   token = token->next;
@@ -97,6 +106,14 @@ LVar *find_lvar(Token *tok) {
   return NULL;
 }
 
+int is_alnum(char c) {
+  return ('a' <= c && c <= 'z') ||
+         ('A' <= c && c <= 'Z') ||
+         ('0' <= c && c <= '9') ||
+         (c == '_');
+}
+
+
 Token *tokenize() {
   char *p = user_input;
 
@@ -127,6 +144,12 @@ Token *tokenize() {
       continue;
     }
 
+    if (startswith(p, "return") && !is_alnum(p[6])) {
+      current = new_token(TOKEN_RETURN, current, p, 6);
+      p += 6;
+      continue;
+    }
+    
     if('a' <= *p && *p <= 'z') {
       char *c = p;
       while('a' <= *c && *c <= 'z') {
