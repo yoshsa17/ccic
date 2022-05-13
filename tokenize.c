@@ -40,13 +40,13 @@ bool consume(char *op) {
 }
 
 Token* consume_ident() {
-  if(token->type != TOKEN_IDENT) {
+  if (token->type != TOKEN_IDENT) {
     return NULL;
   }
+    Token* tok = token;
     token = token->next;
-    return token;
+    return tok;
 }
-
 
 // If the next token is the expected symbol, proceed one token forward.
 // Otherwise, throw an error.

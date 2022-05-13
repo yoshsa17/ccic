@@ -1,6 +1,5 @@
 #include "1cc.h"
 
-
 Node *new_node(NodeType type) {
   Node *node = calloc(1, sizeof(Node));
   node->type = type;

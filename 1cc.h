@@ -69,11 +69,11 @@ Node *new_node(NodeType type);
 Node *new_binary(NodeType type, Node *lhs, Node *rhs);
 Node *new_node_num(int val);
 
-Node *assign();
-Node *stmt();
 void program();
-
+Node *stmt();
 Node *expr();
+Node *assign();
+
 Node *equality();
 Node *relational();
 Node *add();
