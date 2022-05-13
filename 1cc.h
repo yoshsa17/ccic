@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-//// tokenize
+//// Tokenize
 
 typedef enum {
   TOKEN_RESERVED, // symbol (e.g "+", "-")
@@ -37,7 +37,7 @@ Token *new_token(TokenType type, Token *current, char *str, int len);
 bool startswith(char *p, char *q);
 Token *tokenize();
 
-//// codegen
+//// Parse
 
 // AST node type
 typedef enum {
@@ -80,6 +80,8 @@ Node *add();
 Node *mul();
 Node *unary();
 Node *primary();
+
+//// Codegen
 
 void gen_lval(Node *node);
 void gen(Node *node);
