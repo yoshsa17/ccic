@@ -23,8 +23,17 @@ struct Token {
   int len; // token length for "==", "<=" etc.
 };
 
+typedef struct LVar LVar;
+struct LVar {
+  LVar *next;
+  char *name;
+  int len;
+  int offset; 
+};
+
 extern Token *token;
 extern char *user_input;
+extern LVar *locals;
 
 void error(char *fmt, ...);
 void error_at(char *loc, char *fmt, ...);
@@ -35,6 +44,7 @@ int expect_number();
 bool at_eof();
 Token *new_token(TokenType type, Token *current, char *str, int len);
 bool startswith(char *p, char *q);
+LVar *find_lvar(Token *tok);
 Token *tokenize();
 
 //// Parse

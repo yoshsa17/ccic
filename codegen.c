@@ -1,6 +1,5 @@
 #include "1cc.h"
 
-
 // calculate the address of the variable and pushes it onto the stack
 void gen_lval(Node *node) {
   if (node->type != ND_LVAR){
