@@ -38,18 +38,8 @@ bool consume(char *op) {
   return true;
 }
 
-bool consume_return(char *op) {
-  if (token->type != TOKEN_RETURN ||
-      strlen(op) != token->len ||
-      memcmp(token->str, op, token->len)) {
-    return false;
-  }
-  token = token->next;
-  return true;
-}
-
-Token* consume_ident() {
-  if (token->type != TOKEN_IDENT) {
+Token *consume_type(TokenType type) {
+  if (token->type != type) {
     return NULL;
   }
     Token* tok = token;
@@ -64,7 +54,7 @@ void expect(char *op) {
       strlen(op) != token->len ||
       memcmp(token->str, op, token->len)) {
 
-    error_at(token->str, "token is not \"%s\"", op);
+    error_at(token->str, "expected:\"%s\" actual\"%s\"", op, token->str);
   }
   token = token->next;
 }
@@ -113,6 +103,22 @@ int is_alnum(char c) {
          (c == '_');
 }
 
+typedef struct ReservedWord ReservedWord;
+struct ReservedWord {
+  char *word;
+  TokenType type;
+};
+
+ReservedWord reservedWord[] = {
+  {"return", TOKEN_RETURN},
+  {"if", TOKEN_IF},
+  {"else", TOKEN_ELSE},
+  {"while", TOKEN_WHILE},
+  {"for", TOKEN_FOR},
+  {"", TOKEN_EOF}
+};
+
+
 
 Token *tokenize() {
   char *p = user_input;
@@ -144,9 +150,19 @@ Token *tokenize() {
       continue;
     }
 
-    if (startswith(p, "return") && !is_alnum(p[6])) {
-      current = new_token(TOKEN_RETURN, current, p, 6);
-      p += 6;
+    bool found = false;
+    for(int i = 0; reservedWord[i].type != TOKEN_EOF; i++) {
+      char *w = reservedWord[i].word;
+      int len = strlen(w);
+      TokenType type = reservedWord[i].type;
+      if(startswith(p,w) && !is_alnum(p[len])) {
+        current = new_token(type, current, p, len);
+        p += len;
+        found = true;
+        break;
+      }
+    }
+    if(found) {
       continue;
     }
     

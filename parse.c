@@ -32,11 +32,78 @@ void program() {
   code[i] = NULL;
 }
 
-// stmt       = expr ";" | "return" expr ";"
+// stmt       = expr ";" 
+//          | "return" expr ";"
+//          | "while" "(" expr ")" stmt
+//          | "for" "(" expr? ";" expr? ";" expr? ")" stmt
+//          | ...
 Node *stmt() {
   Node *node;
 
-  if(consume_return("return")) {
+  if(consume_type(TOKEN_FOR)) {
+    expect("(");
+    node = calloc(1, sizeof(Node));
+    node->type = ND_FOR;
+
+    Node *left = calloc(1, sizeof(Node));
+    left->type = ND_FOR_LEFT;
+    Node *right = calloc(1, sizeof(Node));
+    right->type = ND_FOR_RIGHT;
+
+    if(!consume(";")) {
+      left->lhs = expr();
+      expect(";");
+    }
+
+    if(!consume(";")) {
+      left->rhs = expr();
+      expect(";");
+    }
+    
+    if(!consume(")")) {
+      right->lhs = expr();
+      expect(")");
+    }
+
+    right->rhs = stmt();
+
+    node->lhs = left;
+    node->rhs = right;
+
+    return node;
+  }
+
+
+  if(consume_type(TOKEN_WHILE)) {
+    expect("(");
+    node = calloc(1, sizeof(Node));
+    node->type = ND_WHILE;
+    node->lhs = expr();
+    expect(")");
+    node->rhs = stmt();
+    return node;
+  }
+
+  if(consume_type(TOKEN_IF)) {
+    expect("(");
+    node = calloc(1, sizeof(Node));
+    node->type = ND_IF;
+    node->lhs = expr();
+    expect(")");
+    node->rhs = stmt();
+
+    if(consume_type(TOKEN_ELSE)) {
+      Node *els = calloc(1, sizeof(Node));
+      els->type = ND_ELSE;
+      els->lhs = node->rhs;
+      els->rhs = stmt();
+      node->rhs = els;
+    } 
+
+    return node;
+  }
+
+  if(consume_type(TOKEN_RETURN)) {
     node = calloc(1, sizeof(Node));
     node->type = ND_RETURN;
     node->lhs = expr();
@@ -145,7 +212,7 @@ Node *primary() {
     return node;
   }
 
-  Token *tok = consume_ident();
+  Token *tok = consume_type(TOKEN_IDENT);
   if (tok) {
     Node *node = calloc(1, sizeof(Node));
     node->type = ND_LVAR;

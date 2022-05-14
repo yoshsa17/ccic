@@ -11,6 +11,10 @@ typedef enum {
   TOKEN_RESERVED, // symbol (e.g "+", "-")
   TOKEN_IDENT,
   TOKEN_RETURN,
+  TOKEN_IF,
+  TOKEN_ELSE,
+  TOKEN_WHILE,
+  TOKEN_FOR,
   TOKEN_NUM,      // number
   TOKEN_EOF,      // token representing the end of the input
 } TokenType;
@@ -39,8 +43,7 @@ extern LVar *locals;
 void error(char *fmt, ...);
 void error_at(char *loc, char *fmt, ...);
 bool consume(char *op);
-bool consume_return(char *op);
-Token* consume_ident();
+Token *consume_type(TokenType type);
 void expect(char *op);
 int expect_number();
 bool at_eof();
@@ -66,6 +69,12 @@ typedef enum {
   ND_ASSIGN, // =
   ND_LVAR,   // local variable
   ND_RETURN, // return
+  ND_IF, // if
+  ND_ELSE, // else
+  ND_WHILE, // while
+  ND_FOR,  // for
+  ND_FOR_LEFT,
+  ND_FOR_RIGHT,
 } NodeType;
 
 typedef struct Node Node;
@@ -73,6 +82,7 @@ struct Node {
   NodeType type; 
   Node *lhs;     // left child node
   Node *rhs;     // right child node
+  Node *els;     // only type == ND_IF
   int val;       // only type == ND_NUM
   int offset;  // only type == ND_LVAR
 };
