@@ -33,12 +33,24 @@ void program() {
 }
 
 // stmt       = expr ";" 
+//          | "{" stmt* "}"
 //          | "return" expr ";"
 //          | "while" "(" expr ")" stmt
 //          | "for" "(" expr? ";" expr? ";" expr? ")" stmt
 //          | ...
 Node *stmt() {
   Node *node;
+
+  if(consume("{")) {
+    node = calloc(1, sizeof(Node));
+    node->type = ND_BLOCK;
+    node->block = calloc(100, sizeof(Node));
+
+    for(int i = 0; !consume("}"); i++) {
+      node->block[i] = stmt();
+    }
+    return node;
+  }
 
   if(consume_type(TOKEN_FOR)) {
     expect("(");

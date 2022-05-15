@@ -20,6 +20,12 @@ void gen(Node *node) {
   int id = genCounter;
 
   switch (node->type) {
+  case ND_BLOCK:
+    for (int i = 0; node->block[i]; i++) {
+      gen(node->block[i]);
+      printf("  pop rax\n");
+    }
+    return;
   case ND_FOR:
     gen(node->lhs->lhs);
     printf(".Lbegin%03d:\n", id);

@@ -75,6 +75,7 @@ typedef enum {
   ND_FOR,  // for
   ND_FOR_LEFT,
   ND_FOR_RIGHT,
+  ND_BLOCK,
 } NodeType;
 
 typedef struct Node Node;
@@ -82,7 +83,7 @@ struct Node {
   NodeType type; 
   Node *lhs;     // left child node
   Node *rhs;     // right child node
-  Node *els;     // only type == ND_IF
+  Node **block;  // only type == ND_BLOCK
   int val;       // only type == ND_NUM
   int offset;  // only type == ND_LVAR
 };
